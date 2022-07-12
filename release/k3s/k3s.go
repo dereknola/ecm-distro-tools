@@ -18,6 +18,7 @@ import (
 	ecmConfig "github.com/rancher/ecm-distro-tools/cmd/release/config"
 	ecmExec "github.com/rancher/ecm-distro-tools/exec"
 	"github.com/rancher/ecm-distro-tools/release"
+	"github.com/rancher/ecm-distro-tools/release/rgit"
 	"github.com/rancher/ecm-distro-tools/repository"
 	ssh2 "golang.org/x/crypto/ssh"
 	"golang.org/x/mod/semver"
@@ -381,7 +382,7 @@ func runTagScript(r *ecmConfig.K3sRelease, gitConfigFile, wrapperImageTag string
 	uid := strconv.Itoa(os.Getuid())
 	gid := strconv.Itoa(os.Getgid())
 
-	gopath, err := ecmExec.RunCommand(r.Workspace, "go", "env", "GOPATH")
+	gopath, err := rgit.RunCommandInDir(r.Workspace, "go", "env", "GOPATH")
 	if err != nil {
 		return "", err
 	}
