@@ -16,17 +16,19 @@ import (
 )
 
 const (
-	nginxURL                = "https://github.com/ORG/ingress-nginx"
-	nginxDir                = "ingress-nginx"
-	numberOfHardenedCommits = 4
+	nginxURL = "https://github.com/ORG/ingress-nginx"
+	nginxDir = "ingress-nginx"
 )
 
-// List of the last 3 hardened commit messages
-var cherryPickCommits = []string{
+// List of the last hardened commit messages
+var hardenedCommits = []string{
 	"Adding drone and build artifacts",
 	"Changes to E2E tests",
 	"Hardened Nginx and S390x changes",
 	"Use BCI base image",
+	"Downgrade nginx to 1.21.4 for pcre compatability",
+	"add arm64 support",
+	"remove e2e like s390x",
 }
 
 func checkFlags(c *cli.Context) error {
@@ -187,8 +189,8 @@ func switchToHardenedBranch(repo *git.Repository, user, tag string) (string, err
 
 // rebaseUpstream will rebase the latest upstream tag onto the user's fork and deal with conflicts
 func rebaseUpstream(repo *git.Repository, tag string) error {
-	_, err := rgit.RunCommandInDir(nginxDir, "git", "rebase", "--onto", tag, "-Xtheirs", fmt.Sprintf("HEAD~%d", numberOfHardenedCommits))
-	if err != nil && strings.Contains(err.Error(), cherryPickCommits[0]) {
+	_, err := rgit.RunCommandInDir(nginxDir, "git", "rebase", "--onto", tag, "-Xtheirs", fmt.Sprintf("HEAD~%d", len(hardenedCommits)))
+	if err != nil && strings.Contains(err.Error(), hardenedCommits[0]) {
 		if err2 := rgit.RemoveFiles(nginxDir, []string{".github/workflows/ci.yaml", ".github/workflows/depreview.yaml"}); err2 != nil {
 			return err2
 		}
@@ -196,7 +198,7 @@ func rebaseUpstream(repo *git.Repository, tag string) error {
 		return err
 	}
 	_, err = rgit.RunCommandInDir(nginxDir, "git", "rebase", "--continue")
-	if err != nil && strings.Contains(err.Error(), cherryPickCommits[2]) {
+	if err != nil && strings.Contains(err.Error(), hardenedCommits[2]) {
 		if err2 := rgit.RemoveFiles(nginxDir, []string{"images/nginx/rootfs/Dockerfile"}); err2 != nil {
 			return err2
 		}
@@ -213,20 +215,27 @@ func rebaseUpstream(repo *git.Repository, tag string) error {
 // cherryPickHardened will cherry-pick the hardened-nginx commits on top of the new branch
 func cherryPickHardened(repo *git.Repository, user, tag string) error {
 	// Cherry-pick the latest hardened-nginx commits onto the new branch
-	for i := numberOfHardenedCommits - 1; i >= 0; i-- {
+	for i := len(hardenedCommits) - 1; i >= 0; i-- {
 		commit := fmt.Sprintf("%s~%d", tag, i)
 		_, err := rgit.RunCommandInDir(nginxDir, "git", "cherry-pick", "-Xtheirs", commit)
 		if err != nil {
-			if strings.Contains(err.Error(), cherryPickCommits[0]) {
+			if strings.Contains(err.Error(), hardenedCommits[0]) {
 				if err2 := rgit.RemoveFiles(nginxDir, []string{".github/workflows/ci.yaml", ".github/workflows/depreview.yaml"}); err2 != nil {
 					return err2
 				}
 				if out, err2 := rgit.RunCommandInDir(nginxDir, "git", "cherry-pick", "--continue"); err2 != nil {
 					return fmt.Errorf("unable to cherry-pick: %s: %v", out, err2)
 				}
-			} else if strings.Contains(err.Error(), cherryPickCommits[2]) {
+			} else if strings.Contains(err.Error(), hardenedCommits[2]) {
 				if err2 := rgit.RemoveFiles(nginxDir, []string{"images/nginx/rootfs/Dockerfile"}); err2 != nil {
 					return err2
+				}
+				if out, err2 := rgit.RunCommandInDir(nginxDir, "git", "cherry-pick", "--continue"); err2 != nil {
+					return fmt.Errorf("unable to cherry-pick: %s: %v", out, err2)
+				}
+			} else if strings.Contains(err.Error(), hardenedCommits[3]) {
+				if out, err2 := rgit.RunCommandInDir(nginxDir, "git", "add", "Dockerfile.dapper"); err2 != nil {
+					return fmt.Errorf("unable to cherry-pick: %s: %v", out, err2)
 				}
 				if out, err2 := rgit.RunCommandInDir(nginxDir, "git", "cherry-pick", "--continue"); err2 != nil {
 					return fmt.Errorf("unable to cherry-pick: %s: %v", out, err2)

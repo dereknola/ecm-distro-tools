@@ -27,7 +27,7 @@ func RunCommandInDir(dir, cmd string, args ...string) (string, error) {
 	command.Dir = dir
 	err := command.Run()
 	if err != nil {
-		return "", errors.New(errb.String())
+		return "", fmt.Errorf("failed to run %s: %s", cmd+strings.Join(args, " "), errb.String())
 	}
 	return outb.String(), nil
 }
