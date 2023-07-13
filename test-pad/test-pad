@@ -16,7 +16,7 @@ usage() {
     -d              kill cluster and delete files
     --download      only download artifacts, don't create cluster
     --skip          skip Vagrantfile download
-    --os            override default OS [alpine|ubuntu|debian]
+    --os            override default OS [alpine|ubuntu|debian|leap]
     -h, --help      show help
 
 docs: https://github.com/rancher/ecm-distro-tools/blob/master/docs/test_pad.md
@@ -35,6 +35,7 @@ examples:
     $0 -r k3s -v 1d4f995edd33186e178bfa9cf3d442dd244d2022 -c basic-lite
     $0 -r k3s -b ../../k3s/dist/artifacts/k3s -c ha-lite 
     $0 -r rke2 -b ../../rke2/dist/artifacts/rke2.linux-amd64.tar.gz -i ../../rke2/build/images -c basic
+    $0 -r rke2 -v v1.25.11+rke2r1 -c ha-lite
 "
 }
 
@@ -277,9 +278,11 @@ fi
 if [ "${OSFLAG}" = "alpine" ]; then 
     OS=generic/alpine317; 
 elif [ "${OSFLAG}" = "ubuntu" ]; then 
-    OS=generic/ubuntu2004; 
+    OS=generic/ubuntu2204; 
 elif [ "${OSFLAG}" = "debian" ]; then 
     OS=generic/debian11; 
+elif [ "${OSFLAG}" = "leap" ]; then 
+    OS=opensuse/Leap-15.4.x86_64; 
 elif [ -n "${OSFLAG}" ]; then
     echo "error: unsupported OS (--os) $OSFLAG"
     exit 1
