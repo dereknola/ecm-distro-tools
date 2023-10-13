@@ -106,10 +106,31 @@ func CheckoutRemoteBranch(dir, remote, branchName string) error {
 	return nil
 }
 
+// ActOnFiles peforms the given action on the list of files
+func ActOnFiles(dir string, action string, files []string) error {
+	if action == "add" {
+		return AddFiles(dir, files)
+	}
+	if action == "remove" {
+		return RemoveFiles(dir, files)
+	}
+	return nil
+}
+
 // RemoveFiles removes the list of files from the repo
 func RemoveFiles(dir string, files []string) error {
 	for _, file := range files {
 		if _, err := RunCommandInDir(dir, "git", "rm", file); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// AddFiles adds the list of files to the repo
+func AddFiles(dir string, files []string) error {
+	for _, file := range files {
+		if _, err := RunCommandInDir(dir, "git", "add", file); err != nil {
 			return err
 		}
 	}

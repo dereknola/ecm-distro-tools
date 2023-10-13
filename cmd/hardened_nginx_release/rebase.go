@@ -20,15 +20,21 @@ const (
 	nginxDir = "ingress-nginx"
 )
 
+type CommitModification struct {
+	Message string
+	Action  string
+	Files   []string
+}
+
 // List of the last hardened commit messages
-var hardenedCommits = []string{
-	"Adding drone and build artifacts",
-	"Changes to E2E tests",
-	"Hardened Nginx and S390x changes",
-	"Use BCI base image",
-	"Downgrade nginx to 1.21.4 for pcre compatability",
-	"add arm64 support",
-	"remove e2e like s390x",
+var hardenedCommits = []CommitModification{
+	{"Adding drone and build artifacts", "remove", []string{".github/workflows/ci.yaml", ".github/workflows/depreview.yaml"}},
+	{"Changes to E2E tests", "add", []string{"test/e2e/settings/opentelemetry.go"}},
+	{"Hardened Nginx and S390x changes", "remove", []string{"images/nginx/rootfs/Dockerfile"}},
+	{"Use BCI base image", "add", []string{"Dockerfile.dapper"}},
+	{Message: "Downgrade nginx to 1.21.4 for pcre compatability"},
+	{"add arm64 support", "remove", []string{"cmd/plugin/commands/ingresses/ingresses_test.go"}},
+	{Message: "remove e2e like s390x"},
 }
 
 func checkFlags(c *cli.Context) error {
@@ -199,7 +205,7 @@ func switchToHardenedBranch(repo *git.Repository, user, tag, previous string) (s
 // rebaseUpstream will rebase the latest upstream tag onto the user's fork and deal with conflicts
 func rebaseUpstream(repo *git.Repository, tag string) error {
 	_, err := rgit.RunCommandInDir(nginxDir, "git", "rebase", "--onto", tag, "-Xtheirs", fmt.Sprintf("HEAD~%d", len(hardenedCommits)))
-	if err != nil && strings.Contains(err.Error(), hardenedCommits[0]) {
+	if err != nil && strings.Contains(err.Error(), hardenedCommits[0].Message) {
 		if err2 := rgit.RemoveFiles(nginxDir, []string{".github/workflows/ci.yaml", ".github/workflows/depreview.yaml"}); err2 != nil {
 			return err2
 		}
@@ -207,7 +213,7 @@ func rebaseUpstream(repo *git.Repository, tag string) error {
 		return err
 	}
 	_, err = rgit.RunCommandInDir(nginxDir, "git", "rebase", "--continue")
-	if err != nil && strings.Contains(err.Error(), hardenedCommits[2]) {
+	if err != nil && strings.Contains(err.Error(), hardenedCommits[2].Message) {
 		if err2 := rgit.RemoveFiles(nginxDir, []string{"images/nginx/rootfs/Dockerfile"}); err2 != nil {
 			return err2
 		}
@@ -228,35 +234,31 @@ func cherryPickHardened(repo *git.Repository, user, tag string) error {
 		commit := fmt.Sprintf("%s~%d", tag, i)
 		_, err := rgit.RunCommandInDir(nginxDir, "git", "cherry-pick", "-Xtheirs", commit)
 		if err != nil {
-			if strings.Contains(err.Error(), hardenedCommits[0]) {
-				if err2 := rgit.RemoveFiles(nginxDir, []string{".github/workflows/ci.yaml", ".github/workflows/depreview.yaml"}); err2 != nil {
+			hardenedCommit := findHardenedCommit(err.Error(), hardenedCommits)
+			if hardenedCommit.Message != "" {
+				if err2 := rgit.ActOnFiles(nginxDir, hardenedCommit.Action, hardenedCommit.Files); err2 != nil {
 					return err2
-				}
-				if out, err2 := rgit.RunCommandInDir(nginxDir, "git", "cherry-pick", "--continue"); err2 != nil {
-					return fmt.Errorf("unable to cherry-pick: %s: %v", out, err2)
-				}
-			} else if strings.Contains(err.Error(), hardenedCommits[2]) {
-				if err2 := rgit.RemoveFiles(nginxDir, []string{"images/nginx/rootfs/Dockerfile"}); err2 != nil {
-					return err2
-				}
-				if out, err2 := rgit.RunCommandInDir(nginxDir, "git", "cherry-pick", "--continue"); err2 != nil {
-					return fmt.Errorf("unable to cherry-pick: %s: %v", out, err2)
-				}
-			} else if strings.Contains(err.Error(), hardenedCommits[3]) {
-				if out, err2 := rgit.RunCommandInDir(nginxDir, "git", "add", "Dockerfile.dapper"); err2 != nil {
-					return fmt.Errorf("unable to cherry-pick: %s: %v", out, err2)
-				}
-				if out, err2 := rgit.RunCommandInDir(nginxDir, "git", "cherry-pick", "--continue"); err2 != nil {
-					return fmt.Errorf("unable to cherry-pick: %s: %v", out, err2)
 				}
 			} else {
 				return err
+			}
+			if out, err3 := rgit.RunCommandInDir(nginxDir, "git", "cherry-pick", "--continue"); err3 != nil {
+				return fmt.Errorf("unable to cherry-pick: %s: %v", out, err3)
 			}
 		}
 	}
 	logrus.Infof("Successfully cherry-picked hardened commits, use the 'push-rancher' command")
 
 	return nil
+}
+
+func findHardenedCommit(commit string, commits []CommitModification) CommitModification {
+	for _, c := range commits {
+		if strings.Contains(commit, c.Message) {
+			return c
+		}
+	}
+	return CommitModification{}
 }
 
 func getHardenedBranch(tag string) string {
