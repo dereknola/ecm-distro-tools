@@ -32,6 +32,10 @@ var (
 			Name:  "tag",
 			Usage: "upstream tag to rebase onto",
 		},
+		&cli.StringFlag{
+			Name:  "previous",
+			Usage: "previous hardened branch to rebase from",
+		},
 		userFlag,
 		debugFlag,
 	}

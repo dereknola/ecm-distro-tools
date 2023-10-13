@@ -98,7 +98,7 @@ func CheckoutRemoteBranch(dir, remote, branchName string) error {
 	logrus.Debug(output)
 	if err != nil {
 		errCatch := fmt.Sprintf("fatal: '%s' is not a commit and a branch '%s' cannot be created from it\n", remoteRef, branchName)
-		if err.Error() == errCatch {
+		if strings.Contains(err.Error(), errCatch) {
 			return ErrRemotebranchNotFound
 		}
 		return err

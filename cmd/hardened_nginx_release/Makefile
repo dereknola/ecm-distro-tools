@@ -14,3 +14,4 @@ $(BINDIR)/$(BINARY): clean
 clean:
 	$(GO) clean
 	rm -f $(BINDIR)/$(BINARY)
+	rm -rf ./ingress-nginx

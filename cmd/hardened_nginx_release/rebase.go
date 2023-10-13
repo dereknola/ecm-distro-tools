@@ -44,6 +44,7 @@ func Rebase(c *cli.Context) error {
 	}
 	ghUser := c.String("user")
 	tag := c.String("tag")
+	previous := c.String("previous")
 	repo, err := setupNginxRemotes(ghUser)
 	if err != nil {
 		return err
@@ -57,7 +58,7 @@ func Rebase(c *cli.Context) error {
 		logrus.Info("found latest controller tag: ", tag)
 	}
 
-	newBranch, err := switchToHardenedBranch(repo, ghUser, tag)
+	newBranch, err := switchToHardenedBranch(repo, ghUser, tag, previous)
 	if err != nil {
 		return err
 	}
@@ -65,6 +66,9 @@ func Rebase(c *cli.Context) error {
 		logrus.Infof("No remote branch %s found, creating new branch based of tag %s", newBranch, tag)
 		if err := rgit.CreateNewBranchFromTag(nginxDir, newBranch, tag); err != nil {
 			return err
+		}
+		if previous != "" {
+			return cherryPickHardened(repo, ghUser, previous)
 		}
 		hardenedBranch := getLastHardenedBranch(tag)
 		return cherryPickHardened(repo, ghUser, hardenedBranch)
@@ -162,10 +166,10 @@ func setupNginxRemotes(user string) (*git.Repository, error) {
 	return repo, nil
 }
 
-func switchToHardenedBranch(repo *git.Repository, user, tag string) (string, error) {
+func switchToHardenedBranch(repo *git.Repository, user, tag, previous string) (string, error) {
 	rgit.CleanRepo(nginxDir)
 	// Switch to the latest "hardened-nginx-vX.Y.Z-fix" branch based on the upstream tag
-	// upstream:controller-1.2.3 ==> rancher:hardened-nginx-v1.2.x-fix
+	// upstream:controller-v1.9.3 ==> rancher:hardened-nginx-v1.9.x-fix
 	branchName := getHardenedBranch(tag)
 	// If the hardened branch doesn't exist, pull down the previous hardened branch instead
 	// and switch back to main
@@ -177,7 +181,12 @@ func switchToHardenedBranch(repo *git.Repository, user, tag string) (string, err
 		if err != nil && err != rgit.ErrRemotebranchNotFound {
 			return "", err
 		}
-		latestHardenedBranch := getLastHardenedBranch(tag)
+		var latestHardenedBranch string
+		if previous != "" {
+			latestHardenedBranch = previous
+		} else {
+			latestHardenedBranch = getLastHardenedBranch(tag)
+		}
 		if err := rgit.CheckoutRemoteBranch(nginxDir, user, latestHardenedBranch); err != nil {
 			return "", fmt.Errorf("unable to find %s: %v", latestHardenedBranch, err)
 		}
