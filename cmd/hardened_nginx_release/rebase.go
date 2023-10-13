@@ -29,12 +29,15 @@ type CommitModification struct {
 // List of the last hardened commit messages
 var hardenedCommits = []CommitModification{
 	{"Adding drone and build artifacts", "remove", []string{".github/workflows/ci.yaml", ".github/workflows/depreview.yaml"}},
-	{"Changes to E2E tests", "add", []string{"test/e2e/settings/opentelemetry.go"}},
+	{"Skip or Fix Flaky Unint and E2E Tests", "add", []string{"test/e2e/settings/opentelemetry.go"}},
 	{"Hardened Nginx and S390x changes", "remove", []string{"images/nginx/rootfs/Dockerfile"}},
 	{"Use BCI base image", "add", []string{"Dockerfile.dapper"}},
-	{Message: "Downgrade nginx to 1.21.4 for pcre compatability"},
 	{"add arm64 support", "remove", []string{"cmd/plugin/commands/ingresses/ingresses_test.go"}},
-	{Message: "remove e2e like s390x"},
+	{Message: "Disable s390x Drone pipeline"},
+	{Message: "Downgrade nginx to 1.21.4 for pcre compatability"},
+	{Message: "Drop back to older brotli version"},
+	{Message: "Rancher go.work.sum changes"},
+	{Message: "Rancher go.work.sum changes"},
 }
 
 func checkFlags(c *cli.Context) error {
@@ -74,12 +77,12 @@ func Rebase(c *cli.Context) error {
 			return err
 		}
 		if previous != "" {
-			return cherryPickHardened(repo, ghUser, previous)
+			return cherryPickHardened(previous)
 		}
 		hardenedBranch := getLastHardenedBranch(tag)
-		return cherryPickHardened(repo, ghUser, hardenedBranch)
+		return cherryPickHardened(hardenedBranch)
 	}
-	return rebaseUpstream(repo, tag)
+	return rebaseUpstream(tag)
 }
 
 // setupNginxRemotes will clone the k8s ingress-nginx upstream repo and
@@ -184,7 +187,7 @@ func switchToHardenedBranch(repo *git.Repository, user, tag, previous string) (s
 		return "", err
 	}
 	if err := rgit.CheckoutRemoteBranch(nginxDir, user, branchName); err != nil {
-		if err != nil && err != rgit.ErrRemotebranchNotFound {
+		if err != rgit.ErrRemotebranchNotFound {
 			return "", err
 		}
 		var latestHardenedBranch string
@@ -203,7 +206,7 @@ func switchToHardenedBranch(repo *git.Repository, user, tag, previous string) (s
 }
 
 // rebaseUpstream will rebase the latest upstream tag onto the user's fork and deal with conflicts
-func rebaseUpstream(repo *git.Repository, tag string) error {
+func rebaseUpstream(tag string) error {
 	_, err := rgit.RunCommandInDir(nginxDir, "git", "rebase", "--onto", tag, "-Xtheirs", fmt.Sprintf("HEAD~%d", len(hardenedCommits)))
 	if err != nil && strings.Contains(err.Error(), hardenedCommits[0].Message) {
 		if err2 := rgit.RemoveFiles(nginxDir, []string{".github/workflows/ci.yaml", ".github/workflows/depreview.yaml"}); err2 != nil {
@@ -228,7 +231,7 @@ func rebaseUpstream(repo *git.Repository, tag string) error {
 }
 
 // cherryPickHardened will cherry-pick the hardened-nginx commits on top of the new branch
-func cherryPickHardened(repo *git.Repository, user, tag string) error {
+func cherryPickHardened(tag string) error {
 	// Cherry-pick the latest hardened-nginx commits onto the new branch
 	for i := len(hardenedCommits) - 1; i >= 0; i-- {
 		commit := fmt.Sprintf("%s~%d", tag, i)
